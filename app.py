@@ -4,13 +4,19 @@ import numpy as np
 import os
 from sklearn.linear_model import LinearRegression
 
-st.set_page_config(page_title="Dự đoán điểm học sinh", layout="centered")
-st.title("📘 Dự đoán điểm cuối kỳ của học sinh Việt Nam")
+st.set_page_config(
+    page_title="Dự đoán điểm học sinh",
+    layout="centered",
+    page_icon="📘"
+)
 
-# Đường dẫn file CSV
+# --- HEADER ---
+st.markdown("<h1 style='text-align: center; color: #3a86ff;'>📘 Dự đoán điểm cuối kỳ của học sinh Việt Nam</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Nhập thông tin học tập để dự đoán điểm số. Mô hình dựa trên nhiều yếu tố học tập thực tế.</p>", unsafe_allow_html=True)
+
+# --- FILE CONFIG ---
 DATA_FILE = "du_lieu_du_doan.csv"
 
-# ✅ Hàm load hoặc tạo dữ liệu mẫu nếu file không hợp lệ
 def load_or_create_data():
     if os.path.exists(DATA_FILE):
         try:
@@ -21,8 +27,7 @@ def load_or_create_data():
         except Exception as e:
             st.warning(f"⚠️ Không thể đọc file CSV: {e}")
     
-    # Tạo dữ liệu mẫu
-    st.info("📂 Đang tạo dữ liệu mẫu để huấn luyện mô hình...")
+    st.info("📂 Tạo dữ liệu mẫu để huấn luyện mô hình...")
     np.random.seed(42)
     df = pd.DataFrame({
         'gio_hoc_moi_ngay': np.random.uniform(1, 6, 100),
@@ -45,62 +50,61 @@ def load_or_create_data():
     )
     return df
 
-# 📥 Load dữ liệu
 df = load_or_create_data()
-
-# ✅ Xử lý nếu có NaN (an toàn tuyệt đối)
 df = df.dropna()
+
 if df.empty:
-    st.error("❌ Dữ liệu huấn luyện bị rỗng. Không thể tạo mô hình.")
+    st.error("❌ Dữ liệu không hợp lệ. Không thể huấn luyện mô hình.")
     st.stop()
 
-# 📊 Huấn luyện mô hình
+# --- TRAIN MODEL ---
 X = df.drop(columns=["diem_cuoi_ky"])
 y = df["diem_cuoi_ky"]
 model = LinearRegression()
 model.fit(X, y)
 
-# 📋 Giao diện nhập dữ liệu
-st.subheader("🧑‍🎓 Nhập thông tin học sinh")
+# --- FORM INPUT ---
+st.markdown("## 🧑‍🏫 Nhập thông tin học sinh")
 
-col1, col2 = st.columns(2)
+with st.form("form_du_doan"):
+    col1, col2 = st.columns(2)
+    with col1:
+        gio_hoc = st.slider("📖 Giờ học mỗi ngày", 0.5, 10.0, 3.0, 0.5)
+        buoi_hoc = st.slider("📅 Số buổi học mỗi tuần", 1, 7, 5)
+        hoc_them = st.slider("➕ Giờ học thêm", 0.0, 5.0, 1.0, 0.5)
+        diem_giua_ky = st.slider("📝 Điểm giữa kỳ", 0.0, 10.0, 6.5, 0.5)
+    with col2:
+        dien_thoai = st.slider("📱 Giờ sử dụng điện thoại", 0.0, 8.0, 2.0, 0.5)
+        ngu = st.slider("😴 Giờ ngủ mỗi ngày", 4.0, 10.0, 7.0, 0.5)
+        cang_thang = st.slider("😖 Mức độ căng thẳng (1–5)", 1, 5, 3)
+    
+    submitted = st.form_submit_button("🎯 Dự đoán điểm số")
 
-with col1:
-    gio_hoc = st.slider("📖 Giờ học mỗi ngày", 0.5, 10.0, 3.0, 0.5)
-    buoi_hoc = st.slider("📅 Số buổi học mỗi tuần", 1, 7, 5)
-    hoc_them = st.slider("➕ Giờ học thêm mỗi tuần", 0.0, 5.0, 1.0, 0.5)
-    diem_giua_ky = st.slider("📝 Điểm giữa kỳ", 0.0, 10.0, 6.5, 0.5)
+if submitted:
+    input_data = pd.DataFrame([{
+        'gio_hoc_moi_ngay': gio_hoc,
+        'so_buoi_hoc_trong_tuan': buoi_hoc,
+        'gio_hoc_them': hoc_them,
+        'diem_giua_ky': diem_giua_ky,
+        'dien_thoai': dien_thoai,
+        'ngu': ngu,
+        'cang_thang': cang_thang
+    }])
+    
+    prediction = model.predict(input_data)[0]
+    st.success(f"📌 Dự đoán điểm cuối kỳ: **{prediction:.2f} điểm**")
 
-with col2:
-    dien_thoai = st.slider("📱 Giờ sử dụng điện thoại mỗi ngày", 0.0, 8.0, 2.0, 0.5)
-    ngu = st.slider("😴 Số giờ ngủ mỗi ngày", 4.0, 10.0, 7.0, 0.5)
-    cang_thang = st.slider("😣 Mức độ căng thẳng (1 thấp - 5 cao)", 1, 5, 3)
+    # --- Lưu vào CSV nếu local ---
+    try:
+        input_data["diem_cuoi_ky"] = prediction
+        input_data.to_csv(DATA_FILE, mode='a', header=not os.path.exists(DATA_FILE), index=False)
+    except:
+        st.info("💾 Không thể ghi file vì app đang chạy online.")
 
-# 🧠 Dự đoán
-input_data = pd.DataFrame([{
-    'gio_hoc_moi_ngay': gio_hoc,
-    'so_buoi_hoc_trong_tuan': buoi_hoc,
-    'gio_hoc_them': hoc_them,
-    'diem_giua_ky': diem_giua_ky,
-    'dien_thoai': dien_thoai,
-    'ngu': ngu,
-    'cang_thang': cang_thang
-}])
-
-diem_du_doan = model.predict(input_data)[0]
-st.success(f"🎯 Dự đoán điểm cuối kỳ: **{diem_du_doan:.2f} điểm**")
-
-# 💾 Ghi vào file nếu app chạy local
+# --- LỊCH SỬ DỰ ĐOÁN ---
+st.markdown("## 📊 Lịch sử dự đoán gần đây")
 try:
-    input_data["diem_cuoi_ky"] = diem_du_doan
-    input_data.to_csv(DATA_FILE, mode='a', header=not os.path.exists(DATA_FILE), index=False)
+    history = pd.read_csv(DATA_FILE).tail(10)
+    st.dataframe(history, use_container_width=True)
 except:
-    st.info("📁 App đang chạy online – không thể lưu file lâu dài.")
-
-# 🧾 Hiển thị bảng lịch sử gần nhất
-st.subheader("📊 Lịch sử dự đoán gần đây")
-try:
-    history_df = pd.read_csv(DATA_FILE).tail(10)
-    st.dataframe(history_df)
-except:
-    st.info("⏳ Chưa có lịch sử hoặc không thể đọc file.")
+    st.info("⏳ Chưa có lịch sử hoặc không đọc được dữ liệu.")
