@@ -3,19 +3,17 @@ import pandas as pd
 import numpy as np
 import os
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
 
-st.set_page_config(page_title="Dự đoán điểm học sinh Việt", layout="centered")
+st.set_page_config(page_title="Dự đoán điểm học sinh", layout="centered")
 st.title("📘 Dự đoán điểm cuối kỳ của học sinh Việt Nam")
 
-# --- Tạo hoặc đọc dữ liệu ban đầu ---
+# Tên file CSV dùng để lưu dữ liệu
 DATA_FILE = "du_lieu_du_doan.csv"
 
-if os.path.exists(DATA_FILE):
-    df = pd.read_csv(DATA_FILE)
-else:
-    # Tạo dữ liệu ngẫu nhiên ban đầu nếu chưa có
+# Tạo dữ liệu mẫu nếu file không tồn tại hoặc rỗng
+if not os.path.exists(DATA_FILE) or os.stat(DATA_FILE).st_size == 0:
+    st.warning("🔄 Không tìm thấy dữ liệu → tạo dữ liệu mẫu để huấn luyện mô hình")
+
     np.random.seed(42)
     df = pd.DataFrame({
         'gio_hoc_moi_ngay': np.random.uniform(1, 6, 100),
@@ -26,7 +24,7 @@ else:
         'ngu': np.random.uniform(5, 9, 100),
         'cang_thang': np.random.randint(1, 6, 100),
     })
-    # Tính điểm giả lập
+
     df['diem_cuoi_ky'] = (
         0.5 * df['gio_hoc_moi_ngay'] +
         0.3 * df['so_buoi_hoc_trong_tuan'] +
@@ -37,15 +35,18 @@ else:
         0.2 * df['cang_thang'] +
         np.random.normal(0, 0.5, 100)
     )
-    df.to_csv(DATA_FILE, index=False)
 
-# --- Huấn luyện mô hình ---
+    df.to_csv(DATA_FILE, index=False)
+else:
+    df = pd.read_csv(DATA_FILE)
+
+# Huấn luyện mô hình
 X = df.drop(columns=["diem_cuoi_ky"])
 y = df["diem_cuoi_ky"]
 model = LinearRegression()
 model.fit(X, y)
 
-# --- Giao diện nhập dữ liệu ---
+# Giao diện nhập dữ liệu
 st.subheader("🧑‍🎓 Nhập thông tin học sinh")
 
 col1, col2 = st.columns(2)
@@ -57,11 +58,11 @@ with col1:
     diem_giua_ky = st.slider("📝 Điểm giữa kỳ", 0.0, 10.0, 6.5, 0.5)
 
 with col2:
-    dien_thoai = st.slider("📱 Sử dụng điện thoại mỗi ngày (giờ)", 0.0, 8.0, 2.0, 0.5)
+    dien_thoai = st.slider("📱 Giờ sử dụng điện thoại mỗi ngày", 0.0, 8.0, 2.0, 0.5)
     ngu = st.slider("😴 Số giờ ngủ mỗi ngày", 4.0, 10.0, 7.0, 0.5)
-    cang_thang = st.slider("😣 Mức độ căng thẳng (1 ít - 5 cao)", 1, 5, 3)
+    cang_thang = st.slider("😣 Mức độ căng thẳng (1 thấp - 5 cao)", 1, 5, 3)
 
-# --- Dự đoán ---
+# Dự đoán
 input_data = pd.DataFrame([{
     'gio_hoc_moi_ngay': gio_hoc,
     'so_buoi_hoc_trong_tuan': buoi_hoc,
@@ -75,10 +76,17 @@ input_data = pd.DataFrame([{
 diem_du_doan = model.predict(input_data)[0]
 st.success(f"🎯 Dự đoán điểm cuối kỳ: **{diem_du_doan:.2f} điểm**")
 
-# --- Ghi dữ liệu vào file CSV ---
-input_data["diem_cuoi_ky"] = diem_du_doan
-input_data.to_csv(DATA_FILE, mode='a', header=not os.path.exists(DATA_FILE), index=False)
+# Ghi vào file CSV (nếu app chạy local)
+try:
+    input_data["diem_cuoi_ky"] = diem_du_doan
+    input_data.to_csv(DATA_FILE, mode='a', header=False, index=False)
+except:
+    st.info("ℹ️ App đang chạy online - dữ liệu sẽ không được ghi lâu dài.")
 
-# --- Hiển thị bảng lịch sử ---
-st.subheader("📊 Dữ liệu đã thu thập")
-st.dataframe(pd.read_csv(DATA_FILE).tail(10))  # Chỉ hiển thị 10 dòng gần nhất
+# Hiển thị bảng dự đoán gần nhất
+st.subheader("📊 Lịch sử dự đoán gần đây")
+try:
+    history_df = pd.read_csv(DATA_FILE).tail(10)
+    st.dataframe(history_df)
+except:
+    st.info("⏳ Chưa có lịch sử hoặc không thể đọc file.")
