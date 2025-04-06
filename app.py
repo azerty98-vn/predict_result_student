@@ -7,13 +7,22 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(page_title="Dự đoán điểm học sinh", layout="centered")
 st.title("📘 Dự đoán điểm cuối kỳ của học sinh Việt Nam")
 
-# Tên file CSV dùng để lưu dữ liệu
+# Đường dẫn file CSV
 DATA_FILE = "du_lieu_du_doan.csv"
 
-# Tạo dữ liệu mẫu nếu file không tồn tại hoặc rỗng
-if not os.path.exists(DATA_FILE) or os.stat(DATA_FILE).st_size == 0:
-    st.warning("🔄 Không tìm thấy dữ liệu → tạo dữ liệu mẫu để huấn luyện mô hình")
-
+# ✅ Hàm load hoặc tạo dữ liệu mẫu nếu file không hợp lệ
+def load_or_create_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            df = pd.read_csv(DATA_FILE)
+            if df.empty or df.isnull().values.any():
+                raise ValueError("File CSV trống hoặc chứa NaN.")
+            return df
+        except Exception as e:
+            st.warning(f"⚠️ Không thể đọc file CSV: {e}")
+    
+    # Tạo dữ liệu mẫu
+    st.info("📂 Đang tạo dữ liệu mẫu để huấn luyện mô hình...")
     np.random.seed(42)
     df = pd.DataFrame({
         'gio_hoc_moi_ngay': np.random.uniform(1, 6, 100),
@@ -24,7 +33,6 @@ if not os.path.exists(DATA_FILE) or os.stat(DATA_FILE).st_size == 0:
         'ngu': np.random.uniform(5, 9, 100),
         'cang_thang': np.random.randint(1, 6, 100),
     })
-
     df['diem_cuoi_ky'] = (
         0.5 * df['gio_hoc_moi_ngay'] +
         0.3 * df['so_buoi_hoc_trong_tuan'] +
@@ -35,18 +43,24 @@ if not os.path.exists(DATA_FILE) or os.stat(DATA_FILE).st_size == 0:
         0.2 * df['cang_thang'] +
         np.random.normal(0, 0.5, 100)
     )
+    return df
 
-    df.to_csv(DATA_FILE, index=False)
-else:
-    df = pd.read_csv(DATA_FILE)
+# 📥 Load dữ liệu
+df = load_or_create_data()
 
-# Huấn luyện mô hình
+# ✅ Xử lý nếu có NaN (an toàn tuyệt đối)
+df = df.dropna()
+if df.empty:
+    st.error("❌ Dữ liệu huấn luyện bị rỗng. Không thể tạo mô hình.")
+    st.stop()
+
+# 📊 Huấn luyện mô hình
 X = df.drop(columns=["diem_cuoi_ky"])
 y = df["diem_cuoi_ky"]
 model = LinearRegression()
 model.fit(X, y)
 
-# Giao diện nhập dữ liệu
+# 📋 Giao diện nhập dữ liệu
 st.subheader("🧑‍🎓 Nhập thông tin học sinh")
 
 col1, col2 = st.columns(2)
@@ -62,7 +76,7 @@ with col2:
     ngu = st.slider("😴 Số giờ ngủ mỗi ngày", 4.0, 10.0, 7.0, 0.5)
     cang_thang = st.slider("😣 Mức độ căng thẳng (1 thấp - 5 cao)", 1, 5, 3)
 
-# Dự đoán
+# 🧠 Dự đoán
 input_data = pd.DataFrame([{
     'gio_hoc_moi_ngay': gio_hoc,
     'so_buoi_hoc_trong_tuan': buoi_hoc,
@@ -76,14 +90,14 @@ input_data = pd.DataFrame([{
 diem_du_doan = model.predict(input_data)[0]
 st.success(f"🎯 Dự đoán điểm cuối kỳ: **{diem_du_doan:.2f} điểm**")
 
-# Ghi vào file CSV (nếu app chạy local)
+# 💾 Ghi vào file nếu app chạy local
 try:
     input_data["diem_cuoi_ky"] = diem_du_doan
-    input_data.to_csv(DATA_FILE, mode='a', header=False, index=False)
+    input_data.to_csv(DATA_FILE, mode='a', header=not os.path.exists(DATA_FILE), index=False)
 except:
-    st.info("ℹ️ App đang chạy online - dữ liệu sẽ không được ghi lâu dài.")
+    st.info("📁 App đang chạy online – không thể lưu file lâu dài.")
 
-# Hiển thị bảng dự đoán gần nhất
+# 🧾 Hiển thị bảng lịch sử gần nhất
 st.subheader("📊 Lịch sử dự đoán gần đây")
 try:
     history_df = pd.read_csv(DATA_FILE).tail(10)
